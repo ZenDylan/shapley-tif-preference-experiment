@@ -13,7 +13,7 @@ import random
 import torch
 import numpy as np
 from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments
-from peft import get_peft_model, prepare_model_for_kbit_training
+from peft import get_peft_model
 from trl import SFTTrainer
 from datasets import Dataset
 
@@ -73,7 +73,6 @@ def main():
 
     # ---- 2. 注入 LoRA ----
     print("\n[3] 注入 LoRA...")
-    model = prepare_model_for_kbit_training(model)
     model = get_peft_model(model, lora_config)
 
     trainable_params = [p for p in model.parameters() if p.requires_grad]

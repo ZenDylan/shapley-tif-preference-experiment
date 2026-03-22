@@ -155,23 +155,54 @@ def prepare_pref_data() -> tuple[list, list, list]:
             end = (i + 1) * strata_size
         strata.append(sorted_records[start:end])
 
-    # 计算每档在总采样量中的比例
-    total_samples = N_TRAIN + N_VAL + N_TEST  # 400
-    train_ratio = N_TRAIN / total_samples
-    val_ratio   = N_VAL   / total_samples
-    test_ratio  = N_TEST  / total_samples
+    # 分层采样
+    print(f"\n  [分层采样] 将 margin 分为 {STRATA_COUNT} 档...")
+
+    sorted_records = sorted(records, key=lambda r: r["margin"])
+
+    # 将数据分成 STRATA_COUNT 档
+    strata_size = len(sorted_records) // STRATA_COUNT
+    strata = []
+    for i in range(STRATA_COUNT):
+        start = i * strata_size
+        if i == STRATA_COUNT - 1:
+            end = len(sorted_records)
+        else:
+            end = (i + 1) * strata_size
+        strata.append(sorted_records[start:end])
+
+    # 计算每档应分配的训练/验证/测试样本数（按档内人数比例分配）
+    # train:val:test = N_TRAIN:N_VAL:N_TEST = 200:100:100 = 0.5:0.25:0.25
+    total_records = len(sorted_records)
 
     train_set, val_set, test_set = [], [], []
 
-    for i, stratum in enumerate(strata):
+    for stratum in strata:
         random.shuffle(stratum)
-        n_t = int(len(stratum) * train_ratio)
-        n_v = int(len(stratum) * val_ratio)
-        n_te = len(stratum) - n_t - n_v
+        # 按档内人数比例分配各子集数量
+        n_t  = round(len(stratum) * N_TRAIN / total_records)
+        n_v  = round(len(stratum) * N_VAL  / total_records)
+        n_te = len(stratum) - n_t - n_v  # 测试集取剩余部分
 
         train_set.extend(stratum[:n_t])
         val_set.extend(stratum[n_t:n_t + n_v])
         test_set.extend(stratum[n_t + n_v:])
+
+    # 浮点取整可能导致总数与目标略有偏差，用最后一档微调
+    n_train_diff = N_TRAIN - len(train_set)
+    n_val_diff   = N_VAL   - len(val_set)
+    if n_train_diff != 0:
+        for _ in range(abs(n_train_diff)):
+            if n_train_diff > 0:
+                train_set.append(val_set.pop() if val_set else test_set.pop())
+            else:
+                val_set.append(train_set.pop() if train_set else test_set.pop())
+    if n_val_diff != 0:
+        for _ in range(abs(n_val_diff)):
+            if n_val_diff > 0:
+                val_set.append(test_set.pop() if test_set else train_set.pop())
+            else:
+                test_set.append(val_set.pop() if val_set else train_set.pop())
 
     random.shuffle(train_set)
     random.shuffle(val_set)

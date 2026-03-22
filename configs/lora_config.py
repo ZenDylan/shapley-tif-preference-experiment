@@ -8,7 +8,8 @@ from peft import LoraConfig
 lora_config = LoraConfig(
     r=16,
     lora_alpha=32,
-    target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
+    # Pythia-410m 使用 GPT-NeoX 架构，attention 层名称为 query_key_value（QKV 合并投影）和 dense（输出投影）
+    target_modules=["query_key_value", "dense"],
     lora_dropout=0.05,
     bias="none",
     task_type="CAUSAL_LM",
