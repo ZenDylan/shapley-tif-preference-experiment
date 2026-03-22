@@ -170,9 +170,12 @@ def prepare_pref_data() -> tuple[list, list, list]:
         random.shuffle(stratum)
         stratum_len = len(stratum)
 
+        if total_remaining == 0:
+            break  # 配额已全部用尽
+
         # 按档内人数比例分配配额（整数，避免浮点误差）
-        quota_train = round(stratum_len * N_TRAIN / total_remaining)
-        quota_val   = round(stratum_len * N_VAL  / total_remaining)
+        quota_train = round(stratum_len * remaining_train / total_remaining)
+        quota_val   = round(stratum_len * remaining_val   / total_remaining)
         quota_test  = stratum_len - quota_train - quota_val  # 本档剩余全给 test
 
         # 防止超额：若 train 配额超过剩余量，用尽剩余量并把多出的退回 val
