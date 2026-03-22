@@ -232,7 +232,7 @@ def main():
     # ---- 6. 计算 IRM ----
     print("\n[6] 计算 IRM (β=0.5)...")
     BETA = 0.5
-   irm_results = []
+    irm_results = []
     t_irm_start = time.time()
 
     with tqdm(total=len(train_records), desc="[IRM] 训练集IRM分数", unit="条",

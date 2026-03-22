@@ -14,7 +14,7 @@ import torch
 import numpy as np
 from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments
 from peft import get_peft_model
-from trl import SFTTrainer
+from trl import SFTTrainer, SFTConfig
 from datasets import Dataset
 
 import sys
@@ -118,7 +118,7 @@ def main():
     # ---- 4. 配置 SFTTrainer ----
     print("\n[5] 配置 SFTTrainer...")
 
-    training_args = TrainingArguments(
+    training_args = SFTConfig(
         output_dir=SFT_TRAINING_CONFIG["output_dir"],
         num_train_epochs=SFT_TRAINING_CONFIG["num_train_epochs"],
         per_device_train_batch_size=SFT_TRAINING_CONFIG["per_device_train_batch_size"],
@@ -129,7 +129,6 @@ def main():
         logging_steps=SFT_TRAINING_CONFIG["logging_steps"],
         save_steps=SFT_TRAINING_CONFIG["save_steps"],
         bf16=True,
-        fp16=False,
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
         report_to="none",
@@ -137,6 +136,7 @@ def main():
         remove_unused_columns=False,
         optim="paged_adamw_32bit",
         seed=RANDOM_SEED,
+        max_seq_length=SFT_TRAINING_CONFIG["max_seq_length"],
     )
 
     trainer = SFTTrainer(
@@ -144,7 +144,6 @@ def main():
         args=training_args,
         train_dataset=sft_dataset,
         processing_class=tokenizer,
-        max_seq_length=SFT_TRAINING_CONFIG["max_seq_length"],
     )
 
     print(f"  总训练步数: {trainer.get_train_dataloader().__len__() * training_args.num_train_epochs // training_args.gradient_accumulation_steps}")
