@@ -139,8 +139,8 @@ def prepare_pref_data() -> tuple[list, list, list]:
     percentiles = [25, 50, 75, 90, 95]
     print(f"    分位数: " + ", ".join(f"p{p}={np.percentile(margins, p):.2f}" for p in percentiles))
 
-    # 分层采样
-    print(f"\n  [分层采样] 将 margin 分为 {STRATA_COUNT} 档...")
+    # ---- 分层采样 ----
+    print(f"\n  [分层采样] 将 margin 分为 {STRATA_COUNT} 档，按比例分配 train:val:test = {N_TRAIN}:{N_VAL}:{N_TEST}...")
 
     sorted_records = sorted(records, key=lambda r: r["margin"])
 
@@ -155,54 +155,52 @@ def prepare_pref_data() -> tuple[list, list, list]:
             end = (i + 1) * strata_size
         strata.append(sorted_records[start:end])
 
-    # 分层采样
-    print(f"\n  [分层采样] 将 margin 分为 {STRATA_COUNT} 档...")
+    # 初始化三个集合
+    train_set: list = []
+    val_set: list = []
+    test_set: list = []
 
-    sorted_records = sorted(records, key=lambda r: r["margin"])
-
-    # 将数据分成 STRATA_COUNT 档
-    strata_size = len(sorted_records) // STRATA_COUNT
-    strata = []
-    for i in range(STRATA_COUNT):
-        start = i * strata_size
-        if i == STRATA_COUNT - 1:
-            end = len(sorted_records)
-        else:
-            end = (i + 1) * strata_size
-        strata.append(sorted_records[start:end])
-
-    # 计算每档应分配的训练/验证/测试样本数（按档内人数比例分配）
-    # train:val:test = N_TRAIN:N_VAL:N_TEST = 200:100:100 = 0.5:0.25:0.25
-    total_records = len(sorted_records)
-
-    train_set, val_set, test_set = [], [], []
+    # 剩余配额（整数减法，无浮点误差）
+    remaining_train = N_TRAIN
+    remaining_val   = N_VAL
+    remaining_test  = N_TEST
+    total_remaining = N_TRAIN + N_VAL + N_TEST  # 400
 
     for stratum in strata:
         random.shuffle(stratum)
-        # 按档内人数比例分配各子集数量
-        n_t  = round(len(stratum) * N_TRAIN / total_records)
-        n_v  = round(len(stratum) * N_VAL  / total_records)
-        n_te = len(stratum) - n_t - n_v  # 测试集取剩余部分
+        stratum_len = len(stratum)
 
-        train_set.extend(stratum[:n_t])
-        val_set.extend(stratum[n_t:n_t + n_v])
-        test_set.extend(stratum[n_t + n_v:])
+        # 按档内人数比例分配配额（整数，避免浮点误差）
+        quota_train = round(stratum_len * N_TRAIN / total_remaining)
+        quota_val   = round(stratum_len * N_VAL  / total_remaining)
+        quota_test  = stratum_len - quota_train - quota_val  # 本档剩余全给 test
 
-    # 浮点取整可能导致总数与目标略有偏差，用最后一档微调
-    n_train_diff = N_TRAIN - len(train_set)
-    n_val_diff   = N_VAL   - len(val_set)
-    if n_train_diff != 0:
-        for _ in range(abs(n_train_diff)):
-            if n_train_diff > 0:
-                train_set.append(val_set.pop() if val_set else test_set.pop())
-            else:
-                val_set.append(train_set.pop() if train_set else test_set.pop())
-    if n_val_diff != 0:
-        for _ in range(abs(n_val_diff)):
-            if n_val_diff > 0:
-                val_set.append(test_set.pop() if test_set else train_set.pop())
-            else:
-                test_set.append(val_set.pop() if val_set else train_set.pop())
+        # 防止超额：若 train 配额超过剩余量，用尽剩余量并把多出的退回 val
+        if quota_train > remaining_train:
+            excess = quota_train - remaining_train
+            quota_train = remaining_train
+            quota_val = min(stratum_len - quota_train, quota_val + excess)
+
+        # 防止超额：val 配额
+        if quota_val > remaining_val:
+            excess = quota_val - remaining_val
+            quota_val = remaining_val
+            quota_test = stratum_len - quota_train - quota_val
+
+        # 防止超额：test 配额
+        quota_test = min(quota_test, remaining_test)
+        # 若 test 不够，从 val 补（极端情况很少触发）
+        if quota_train + quota_val + quota_test > stratum_len:
+            quota_test = stratum_len - quota_train - quota_val
+
+        train_set.extend(stratum[:quota_train])
+        val_set.extend(stratum[quota_train:quota_train + quota_val])
+        test_set.extend(stratum[quota_train + quota_val:quota_train + quota_val + quota_test])
+
+        remaining_train -= quota_train
+        remaining_val   -= quota_val
+        remaining_test  -= quota_test
+        total_remaining -= (quota_train + quota_val + quota_test)
 
     random.shuffle(train_set)
     random.shuffle(val_set)

@@ -136,7 +136,6 @@ def main():
         remove_unused_columns=False,
         optim="paged_adamw_32bit",
         seed=RANDOM_SEED,
-        max_seq_length=SFT_TRAINING_CONFIG["max_seq_length"],
     )
 
     trainer = SFTTrainer(
@@ -144,6 +143,7 @@ def main():
         args=training_args,
         train_dataset=sft_dataset,
         processing_class=tokenizer,
+        max_seq_length=SFT_TRAINING_CONFIG["max_seq_length"],
     )
 
     print(f"  总训练步数: {trainer.get_train_dataloader().__len__() * training_args.num_train_epochs // training_args.gradient_accumulation_steps}")
