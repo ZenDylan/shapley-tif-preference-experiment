@@ -23,8 +23,8 @@ python -c "import torch; print(f'  PyTorch: {torch.__version__}'); print(f'  CUD
 echo.
 
 REM ---- 安装依赖 ----
-echo [1/4] 安装 Python 依赖...
-pip install -r requirements.txt
+echo [1/5] 安装 Python 依赖（除 PyTorch）...
+pip install transformers datasets accelerate trl peft scipy numpy matplotlib seaborn psutil tqdm
 if errorlevel 1 (
     echo [错误] 依赖安装失败
     pause
@@ -32,8 +32,23 @@ if errorlevel 1 (
 )
 echo.
 
+REM ---- 重新安装 PyTorch CUDA 版本（必须！普通 pip install 会装成 CPU 版）----
+echo [2/5] 安装 PyTorch CUDA 版本（RTX 4060 需要）...
+echo    注意：如果已安装 CUDA 版，跳过此步不会造成问题
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --no-deps
+if errorlevel 1 (
+    echo [错误] PyTorch CUDA 安装失败，请检查 NVIDIA 驱动
+    pause
+    exit /b 1
+)
+echo.
+
+REM ---- 验证 PyTorch CUDA ----
+python -c "import torch; print(f'  PyTorch: {torch.__version__}'); print(f'  CUDA: {torch.cuda.is_available()}')"
+echo.
+
 REM ---- 阶段一：数据准备 ----
-echo [2/4] 阶段一：数据准备...
+echo [3/5] 阶段一：数据准备...
 echo ----------------------------------------------
 python stage1_setup\prepare_data.py
 if errorlevel 1 (
@@ -46,7 +61,7 @@ echo 阶段一-数据准备完成!
 echo.
 
 REM ---- 阶段一：SFT 训练 ----
-echo [3/4] 阶段一：SFT 训练...
+echo [4/5] 阶段一：SFT 训练...
 echo （这可能需要 30-120 分钟，取决于 GPU 速度）
 echo ----------------------------------------------
 python stage1_setup\train_sft.py
@@ -60,7 +75,7 @@ echo 阶段一-SFT训练完成!
 echo.
 
 REM ---- 阶段二：TIF 计算 ----
-echo [4/4] 阶段二：TIF/LossDiff/IRM 计算...
+echo [5/5] 阶段二：TIF/LossDiff/IRM 计算...
 echo （这可能需要 1-3 小时，取决于 GPU 速度）
 echo ----------------------------------------------
 python stage2_tif\compute_tif.py
